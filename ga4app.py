@@ -4,7 +4,9 @@ import os
 import json
 import tempfile
 import logging
+import pytz 
 
+from datetime import datetime
 from google.cloud import bigquery
 from google.api_core.exceptions import NotFound, BadRequest, GoogleAPICallError
 from io import StringIO
@@ -12,8 +14,75 @@ from io import StringIO
 # Configure logging
 logging.basicConfig(level=logging.INFO, filename='script.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s')
 
-def get_unique_keys_and_types(client, project_id, dataset_id, table_patterns):
-    print("Getting unique keys and their types...")
+# Create a dictionary with country name and corresponding timezone
+timezone_dict = {
+    "North America": {
+        "United States": "America/New_York",
+        "Canada": "America/Toronto",
+        "Mexico": "America/Mexico_City",
+        "Jamaica": "America/Jamaica",
+        "Costa Rica": "America/Costa_Rica",
+        "Bahamas": "America/Nassau",
+        "Honduras": "America/Tegucigalpa",
+        "Cuba": "America/Havana",
+        "Dominican Republic": "America/Santo_Domingo"
+    },
+    "South America": {
+        "Brazil": "America/Sao_Paulo",
+        "Argentina": "America/Argentina/Buenos_Aires",
+        "Chile": "America/Santiago",
+        "Colombia": "America/Bogota",
+        "Peru": "America/Lima",
+        "Uruguay": "America/Montevideo",
+        "Ecuador": "America/Guayaquil",
+        "Bolivia": "America/La_Paz",
+        "Paraguay": "America/Asuncion",
+        "Venezuela": "America/Caracas"
+    },
+    "Europe": {
+        "United Kingdom": "Europe/London",
+        "France": "Europe/Paris",
+        "Germany": "Europe/Berlin",
+        "Italy": "Europe/Rome",
+        "Spain": "Europe/Madrid",
+        "Russia": "Europe/Moscow",
+        "Turkey": "Europe/Istanbul",
+        "Greece": "Europe/Athens",
+        "Poland": "Europe/Warsaw",
+        "Ukraine": "Europe/Kiev"
+    },
+    "Asia": {
+        "India": "Asia/Kolkata",
+        "Japan": "Asia/Tokyo",
+        "China": "Asia/Shanghai",
+        "Saudi Arabia": "Asia/Riyadh",
+        "South Korea": "Asia/Seoul",
+        "Indonesia": "Asia/Jakarta",
+        "Malaysia": "Asia/Kuala_Lumpur",
+        "Vietnam": "Asia/Ho_Chi_Minh",
+        "Philippines": "Asia/Manila",
+        "Thailand": "Asia/Bangkok"
+    },
+    "Oceania": {
+        "Australia": "Australia/Sydney",
+        "New Zealand": "Pacific/Auckland",
+        "Fiji": "Pacific/Fiji",
+        "Papua New Guinea": "Pacific/Port_Moresby",
+        "Samoa": "Pacific/Apia",
+        "Tonga": "Pacific/Tongatapu",
+        "Solomon Islands": "Pacific/Guadalcanal",
+        "Vanuatu": "Pacific/Efate",
+        "Kiribati": "Pacific/Tarawa",
+        "New Caledonia": "Pacific/Noumea"
+    }
+}
+
+# Create a list of continents
+continents = ["North America", "South America", "Europe", "Asia", "Oceania"]
+
+# 
+def get_unique_keys_and_types(client, project_id, dataset_id, event_table_patterns):
+    st.write("Getting unique keys and their types...")
     union_subqueries = [
         f"""
         SELECT key, 
@@ -25,7 +94,7 @@ def get_unique_keys_and_types(client, project_id, dataset_id, table_patterns):
         FROM `{project_id}.{dataset_id}.{table_pattern}`,
         UNNEST(event_params) AS ep
         """
-        for table_pattern in table_patterns
+        for table_pattern in event_table_patterns
     ]
     query = " UNION ALL ".join(union_subqueries) + " GROUP BY key, value_type"
     query_job = client.query(query)
@@ -33,7 +102,8 @@ def get_unique_keys_and_types(client, project_id, dataset_id, table_patterns):
     st.write("Unique keys and types retrieved successfully.")
     return {row.key: row.value_type for row in keys_and_types}
 
-def generate_event_table_query(keys_and_types, project_id, dataset_id, table_patterns):
+# 
+def generate_event_table_query(keys_and_types, project_id, dataset_id, event_table_patterns, utc_ts):
     logging.info("Generating the event table query...")
     
     pivot_sections = []
@@ -51,7 +121,8 @@ def generate_event_table_query(keys_and_types, project_id, dataset_id, table_pat
     union_subqueries = [
         f"""
         SELECT
-            TIMESTAMP_MICROS(event_timestamp) AS event_timestamp,
+            FORMAT_DATETIME("%F %T {utc_ts}", DATETIME(TIMESTAMP_MICROS(event_timestamp), "{utc_ts}")) AS event_timestamp,
+            user_id, 
             user_pseudo_id,
             event_name,
             platform AS event_platform,
@@ -89,7 +160,7 @@ def generate_event_table_query(keys_and_types, project_id, dataset_id, table_pat
             `{project_id}.{dataset_id}.{table_pattern}`,
             UNNEST(event_params) AS ep
         """
-        for table_pattern in table_patterns
+        for table_pattern in event_table_patterns
     ]
 
     sql_query = f"""
@@ -99,6 +170,7 @@ def generate_event_table_query(keys_and_types, project_id, dataset_id, table_pat
     pivot_table AS (
         SELECT 
             event_timestamp,
+            user_id,
             user_pseudo_id,
             event_name,
             event_platform,
@@ -132,7 +204,7 @@ def generate_event_table_query(keys_and_types, project_id, dataset_id, table_pat
         FROM 
             expanded
        GROUP BY 
-    event_timestamp, user_pseudo_id, event_name, event_platform, event_stream_id, traffic_source, traffic_medium, traffic_name, event_geo_country, event_geo_region, event_geo_city, event_geo_sub_continent, event_geo_metro, event_geo_continent, event_device_browser, event_device_language, event_device_is_limited_ad_tracking, event_device_mobile_model_name, event_device_mobile_marketing_name, event_device_mobile_os_hardware_model, event_device_operating_system, event_device_operating_system_version, event_device_category, event_device_mobile_brand_name, event_user_first_touch_timestamp, event_user_ltv_revenue, event_user_ltv_currency, web_info_browser, web_info_browser_version, web_info_hostname
+    event_timestamp, user_id, user_pseudo_id, event_name, event_platform, event_stream_id, traffic_source, traffic_medium, traffic_name, event_geo_country, event_geo_region, event_geo_city, event_geo_sub_continent, event_geo_metro, event_geo_continent, event_device_browser, event_device_language, event_device_is_limited_ad_tracking, event_device_mobile_model_name, event_device_mobile_marketing_name, event_device_mobile_os_hardware_model, event_device_operating_system, event_device_operating_system_version, event_device_category, event_device_mobile_brand_name, event_user_first_touch_timestamp, event_user_ltv_revenue, event_user_ltv_currency, web_info_browser, web_info_browser_version, web_info_hostname
 )
     SELECT 
         * 
@@ -143,44 +215,93 @@ def generate_event_table_query(keys_and_types, project_id, dataset_id, table_pat
 
     # ... (rest of the generate_event_table_query function logic here)
     
-    logging.info("Event table query generated successfully.")
+    logging.info("Event table query generated successfully...")
 
-def generate_user_table_query(project_id, dataset_id, user_table_pattern):
-    logging.info("Generating the user table query...")
-    
+def generate_user_table_query(project_id, dataset_id, user_table_pattern, utc_ts):
+
+    union_subqueries = []
+
+    for pattern in user_table_pattern:
+        if pattern == "pseudonymous_users_*":
+            subquery = f"""
+            SELECT
+                pseudo_user_id AS user_id,
+                FORMAT_DATETIME("%F %T {utc_ts}", DATETIME(TIMESTAMP_MICROS(user_info.last_active_timestamp_micros), "{utc_ts}")) AS user_last_active_timestamp,
+                FORMAT_DATETIME("%F %T {utc_ts}", DATETIME(TIMESTAMP_MICROS(user_info.user_first_touch_timestamp_micros), "{utc_ts}")) AS user_first_touch_timestamp,
+                user_info.first_purchase_date AS user_first_purchase_date,
+                device.operating_system AS user_device_operating_system,
+                device.category AS user_device_category,
+                device.mobile_brand_name AS user_device_mobile_brand_name,
+                device.mobile_model_name AS user_device_mobile_model_name,
+                device.unified_screen_name AS user_device_unified_screen_name,
+                geo.city AS user_geo_city,
+                geo.country AS user_geo_country,
+                geo.continent AS user_geo_continent,
+                geo.region AS user_geo_region,
+                user_ltv.revenue_in_usd AS user_ltv_revenue_in_usd,
+                user_ltv.sessions AS user_ltv_sessions,
+                user_ltv.engagement_time_millis AS user_ltv_engagement_time,
+                user_ltv.purchases AS user_ltv_purchases,
+                user_ltv.engaged_sessions AS user_ltv_engaged_sessions,
+                user_ltv.session_duration_micros AS user_ltv_session_duration,
+                predictions.in_app_purchase_score_7d AS user_prediction_in_app_purchase_score_7d,
+                predictions.purchase_score_7d AS user_prediction_purchase_score_7d,
+                predictions.churn_score_7d AS user_prediction_churn_score_7d,
+                predictions.revenue_28d_in_usd AS user_prediction_revenue_28d,
+                occurrence_date AS user_occurrence_date,
+                last_updated_date AS user_last_updated_date,
+            FROM 
+                `{project_id}.{dataset_id}.{pattern}`
+            """
+            union_subqueries.append(subquery)
+        elif pattern == "users_*":
+            subquery = f"""
+            SELECT
+                user_id AS user_id,
+                FORMAT_DATETIME("%F %T {utc_ts}", DATETIME(TIMESTAMP_MICROS(user_info.last_active_timestamp_micros), "{utc_ts}")) AS user_last_active_timestamp,
+                FORMAT_DATETIME("%F %T {utc_ts}", DATETIME(TIMESTAMP_MICROS(user_info.user_first_touch_timestamp_micros), "{utc_ts}")) AS user_first_touch_timestamp,
+                user_info.first_purchase_date AS user_first_purchase_date,
+                device.operating_system AS user_device_operating_system,
+                device.category AS user_device_category,
+                device.mobile_brand_name AS user_device_mobile_brand_name,
+                device.mobile_model_name AS user_device_mobile_model_name,
+                device.unified_screen_name AS user_device_unified_screen_name,
+                geo.city AS user_geo_city,
+                geo.country AS user_geo_country,
+                geo.continent AS user_geo_continent,
+                geo.region AS user_geo_region,
+                user_ltv.revenue_in_usd AS user_ltv_revenue_in_usd,
+                user_ltv.sessions AS user_ltv_sessions,
+                user_ltv.engagement_time_millis AS user_ltv_engagement_time,
+                user_ltv.purchases AS user_ltv_purchases,
+                user_ltv.engaged_sessions AS user_ltv_engaged_sessions,
+                user_ltv.session_duration_micros AS user_ltv_session_duration,
+                predictions.in_app_purchase_score_7d AS user_prediction_in_app_purchase_score_7d,
+                predictions.purchase_score_7d AS user_prediction_purchase_score_7d,
+                predictions.churn_score_7d AS user_prediction_churn_score_7d,
+                predictions.revenue_28d_in_usd AS user_prediction_revenue_28d,
+                occurrence_date AS user_occurrence_date,
+                last_updated_date AS user_last_updated_date,
+            FROM 
+                `{project_id}.{dataset_id}.{pattern}`
+            """
+            union_subqueries.append(subquery)
+
+    # Join the individual subqueries with a "UNION ALL"
+    combined_subqueries = " UNION ALL ".join(union_subqueries)
+
     sql_query = f"""
-    SELECT
-        pseudo_user_id AS user_pseudo_id,
-        stream_id AS user_stream_id,
-        user_info.last_active_timestamp_micros AS user_last_active_timestamp,
-        user_info.user_first_touch_timestamp_micros AS user_first_touch_timestamp,
-        user_info.first_purchase_date AS user_first_purchase_date,
-        device.operating_system AS user_device_operating_system,
-        device.category AS user_device_category,
-        device.mobile_brand_name AS user_device_mobile_brand_name,
-        device.mobile_model_name AS user_device_mobile_model_name,
-        device.unified_screen_name AS user_device_unified_screen_name,
-        geo.city AS user_geo_city,
-        geo.country AS user_geo_country,
-        geo.continent AS user_geo_continent,
-        geo.region AS user_geo_region,
-        user_ltv.revenue_in_usd AS user_ltv_revenue_in_usd,
-        user_ltv.sessions AS user_ltv_sessions,
-        user_ltv.engagement_time_millis AS user_ltv_engagement_time,
-        user_ltv.purchases AS user_ltv_purchases,
-        user_ltv.engaged_sessions AS user_ltv_engaged_sessions,
-        user_ltv.session_duration_micros AS user_ltv_session_duration,
-        predictions.in_app_purchase_score_7d AS user_prediction_in_app_purchase_score_7d,
-        predictions.purchase_score_7d AS user_prediction_purchase_score_7d,
-        predictions.churn_score_7d AS user_prediction_churn_score_7d,
-        predictions.revenue_28d_in_usd AS user_prediction_revenue_28d,
-        occurrence_date AS user_occurrence_date,
-        last_updated_date AS user_last_updated_date,
+    WITH expanded AS (
+        {combined_subqueries}
+    )
+    SELECT 
+        * 
     FROM 
-        `{project_id}.{dataset_id}.{user_table_pattern}`
-
+        expanded
     """
     return sql_query
+
+    logging.info("User table query generated successfully...")
 
 # Function to retrieve schema columns
 def get_schema_columns(client, project_id, dataset_id, table_name):
@@ -194,6 +315,7 @@ def get_distinct_counts(client, project_id, dataset_id, view_name):
         view_columns = [column.column_name for column in get_schema_columns(client, project_id, dataset_id, view_name)]
         if not view_columns:
             logging.error(f"No columns found in the view: {view_name}")
+            st.error(f"No columns found in a view")
             return {}
 
         # Create a query to get distinct counts for each column
@@ -215,6 +337,7 @@ def get_distinct_counts(client, project_id, dataset_id, view_name):
             return distinct_counts
     except Exception as e:
         logging.error(f"An error occurred while getting distinct counts for {view_name}: {e}")
+        st.error(f"An error occurred while getting distinct counts")
         return {}
 
 def identify_useless_columns(distinct_counts):
@@ -246,6 +369,7 @@ def create_updated_view(client, project_id, dataset_id, view_name, columns_to_ex
             logging.info(f"No columns to exclude in the view: {view_name}")
     except Exception as e:
         logging.error(f"An error occurred while creating the updated view for {view_name}: {e}")
+        st.error(f"An error occurred while creating or updating views")
 
 # Your create_summary_statistics function remains the same
 
@@ -282,22 +406,29 @@ def create_or_replace_view(client, project_id, dataset_id, view_name, query):
             logging.info(f"Created view {view_id} successfully.")
     except BadRequest as e:
         logging.error("Error: Bad request (e.g., schema or query issue). Details: %s", e)
+        st.error("Error: Bad request (e.g., schema or query issue). Check your logs")
     except GoogleAPICallError as e:
         logging.error("Error: API call failed. Details: %s", e)
+        st.error("Error: API call failed. Check your logs")
     except Exception as e:
         logging.error("An unexpected error occurred: %s", e)
+        st.error("Error: An unexpected error occurred. Check your logs")
 
-def create_user_table_view(client, project_id, dataset_id, user_table_pattern):
-    user_table_query = generate_user_table_query(project_id, dataset_id, user_table_pattern)
+def create_user_table_view(client, project_id, dataset_id, user_table_pattern, utc_ts):
+    user_table_query = generate_user_table_query(project_id, dataset_id, user_table_pattern, utc_ts)
     create_or_replace_view(client, project_id, dataset_id, "user_table_view", user_table_query)
 
-def create_event_table_view(client, project_id, dataset_id, table_patterns, keys_and_types):
-    event_table_query = generate_event_table_query(keys_and_types, project_id, dataset_id, table_patterns)
+def create_event_table_view(client, project_id, dataset_id, event_table_patterns, keys_and_types):
+    event_table_query = generate_event_table_query(keys_and_types, project_id, dataset_id, event_table_patterns, utc_ts)
     create_or_replace_view(client, project_id, dataset_id, "event_table_view", event_table_query)
 
 view_names = "user_table_view", "event_table_view"
-table_patterns = "events_*", "events_intraday_*"
-user_table_pattern = "pseudonymous_users_*"
+event_table_patterns = "events_*", "events_intraday_*"
+user_table_pattern = "users_*", "pseudonymous_users_*"
+
+############################################################################################################################################################
+# Streamlit Layout
+############################################################################################################################################################
 
 
 st.set_page_config(layout="wide", page_icon=":unlock:", page_title="GA4 Data Transformer and Dashboard")
@@ -329,6 +460,23 @@ with tab1:
 with tab2:
     st.write('''
             ## Step-by-Step Guide
+            ### Set timezone adjustment:
+            **What this does:** The drop downs below allow for your Google Analytics 4 data to show time in your timezone rather than default of UTC .
+             ''')
+    # Create a dropdown to select a continent
+    continent = st.selectbox("1. Select a continent", continents)
+
+    # Create a dropdown to select a country within the selected continent
+    countries = list(timezone_dict[continent].keys())
+    country = st.selectbox("2. Select a country", countries)
+    
+    # Display the selected UTC offset for confirmation
+    timezone = timezone_dict[continent][country]
+    utc_offset = datetime.now(pytz.timezone(timezone)).strftime('%z')
+    utc_ts = utc_offset[:-2]+':'+utc_offset[-2:]
+    st.markdown(f"> :earth_americas:  **{country}** time zone is **UTC{utc_ts}**")
+
+    st.write('''
             ### Connect Google Analytics 4 (GA4) to BigQuery:
             **What this does:** This step ensures that your Google Analytics 4 data is being sent to BigQuery, making it accessible for further analysis.
             1. Go to your GA4 Property.
@@ -394,14 +542,14 @@ with tab2:
         st.stop()
 
     #This is where things are run
-    keys_and_types = get_unique_keys_and_types(client, project_id, dataset_id, table_patterns)
+    keys_and_types = get_unique_keys_and_types(client, project_id, dataset_id, event_table_patterns)
     if keys_and_types:
         st.write("Retrieved keys and types:")#, keys_and_types)
-        generate_event_table_query(keys_and_types, project_id, dataset_id, table_patterns)
+        generate_event_table_query(keys_and_types, project_id, dataset_id, event_table_patterns, utc_ts)
         st.write("generate_event_table_query")
-        create_user_table_view(client, project_id, dataset_id, user_table_pattern)
+        create_user_table_view(client, project_id, dataset_id, user_table_pattern, utc_ts)
         st.write("create_user_table_view")
-        create_event_table_view(client, project_id, dataset_id, table_patterns, keys_and_types)
+        create_event_table_view(client, project_id, dataset_id, event_table_patterns, keys_and_types)
         st.write("create_event_table_view")
         create_summary_statistics(client, project_id, dataset_id, view_names)
         st.write("create_summary_statistics")
@@ -409,7 +557,6 @@ with tab2:
         st.write('''
             ### Notes
             [Link to looker dashboard](https://lookerstudio.google.com/reporting/b774ca26-720c-4b23-999c-5e5cec53bca3/preview)
-            1. You will need to manually set up your timezones
             ''')
     else:
         st.write("Failed to retrieve keys and types.")
