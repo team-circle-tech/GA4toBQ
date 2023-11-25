@@ -1,3 +1,6 @@
+#TODO: Test that is still works when there are no known users
+#TODO: Add eCommerece 
+
 import streamlit as st
 import pandas as pd
 import os
@@ -99,6 +102,8 @@ def get_unique_keys_and_types(client, project_id, dataset_id, event_table_patter
     query = " UNION ALL ".join(union_subqueries) + " GROUP BY key, value_type"
     query_job = client.query(query)
     keys_and_types = query_job.result()
+    logging.info("keys and types")
+    logging.info(query)
     st.write("Unique keys and types retrieved successfully.")
     return {row.key: row.value_type for row in keys_and_types}
 
@@ -121,44 +126,52 @@ def generate_event_table_query(keys_and_types, project_id, dataset_id, event_tab
     union_subqueries = [
         f"""
         SELECT
-            FORMAT_DATETIME("%F %T {utc_ts}", DATETIME(TIMESTAMP_MICROS(event_timestamp), "{utc_ts}")) AS event_timestamp,
-            user_id, 
-            user_pseudo_id,
-            event_name,
-            platform AS event_platform,
-            stream_id AS event_stream_id,
-            traffic_source.source AS traffic_source,
-            traffic_source.medium AS traffic_medium,
-            traffic_source.name AS traffic_name,
-            geo.country AS event_geo_country,
-            geo.region AS event_geo_region,
-            geo.city AS event_geo_city,
-            geo.sub_continent AS event_geo_sub_continent,
-            geo.metro AS event_geo_metro,
-            geo.continent AS event_geo_continent,
-            device.browser AS event_device_browser,
-            device.language AS event_device_language,
-            device.is_limited_ad_tracking AS event_device_is_limited_ad_tracking,
-            device.mobile_model_name AS event_device_mobile_model_name,
-            device.mobile_marketing_name AS event_device_mobile_marketing_name,
-            device.mobile_os_hardware_model AS event_device_mobile_os_hardware_model,
-            device.operating_system AS event_device_operating_system,
-            device.operating_system_version AS event_device_operating_system_version,
-            device.category AS event_device_category,
-            device.mobile_brand_name AS event_device_mobile_brand_name,
-            user_first_touch_timestamp AS event_user_first_touch_timestamp,
-            user_ltv.revenue AS event_user_ltv_revenue,
-            user_ltv.currency AS event_user_ltv_currency,
-            device.web_info.browser AS web_info_browser,
-            device.web_info.browser_version AS web_info_browser_version,
-            device.web_info.hostname AS web_info_hostname,
+            sub.ueid,
+            FORMAT_DATETIME("%F %T +13:00", DATETIME(TIMESTAMP_MICROS(sub.event_timestamp), "+13:00")) AS event_timezone,
+            sub.event_timestamp AS event_timestamp,
+            sub.event_date,
+            sub.user_id, 
+            sub.user_pseudo_id,
+            sub.event_name,
+            sub.platform AS event_platform,
+            sub.stream_id AS event_stream_id,
+            sub.traffic_source.source AS traffic_source,
+            sub.traffic_source.medium AS traffic_medium,
+            sub.traffic_source.name AS traffic_name,
+            sub.geo.country AS event_geo_country,
+            sub.geo.region AS event_geo_region,
+            sub.geo.city AS event_geo_city,
+            sub.geo.sub_continent AS event_geo_sub_continent,
+            sub.geo.metro AS event_geo_metro,
+            sub.geo.continent AS event_geo_continent,
+            sub.device.browser AS event_device_browser,
+            sub.device.language AS event_device_language,
+            sub.device.is_limited_ad_tracking AS event_device_is_limited_ad_tracking,
+            sub.device.mobile_model_name AS event_device_mobile_model_name,
+            sub.device.mobile_marketing_name AS event_device_mobile_marketing_name,
+            sub.device.mobile_os_hardware_model AS event_device_mobile_os_hardware_model,
+            sub.device.operating_system AS event_device_operating_system,
+            sub.device.operating_system_version AS event_device_operating_system_version,
+            sub.device.category AS event_device_category,
+            sub.device.mobile_brand_name AS event_device_mobile_brand_name,
+            sub.user_first_touch_timestamp AS event_user_first_touch_timestamp,
+            sub.user_ltv.revenue AS event_user_ltv_revenue,
+            sub.user_ltv.currency AS event_user_ltv_currency,
+            sub.device.web_info.browser AS web_info_browser,
+            sub.device.web_info.browser_version AS web_info_browser_version,
+            sub.device.web_info.hostname AS web_info_hostname,
             ep.key AS key,
             ep.value.string_value AS string_value,
             ep.value.int_value AS int_value,
             ep.value.float_value AS float_value
-        FROM 
-            `{project_id}.{dataset_id}.{table_pattern}`,
-            UNNEST(event_params) AS ep
+        FROM (
+            SELECT
+                GENERATE_UUID() as ueid,
+                *
+            FROM 
+                `{project_id}.{dataset_id}.{table_pattern}`
+        ) sub
+        CROSS JOIN UNNEST(sub.event_params) AS ep
         """
         for table_pattern in event_table_patterns
     ]
@@ -169,7 +182,10 @@ def generate_event_table_query(keys_and_types, project_id, dataset_id, event_tab
     ),
     pivot_table AS (
         SELECT 
+            COUNT(DISTINCT ueid) AS ueid_dcount,
+            event_timezone,
             event_timestamp,
+            event_date,
             user_id,
             user_pseudo_id,
             event_name,
@@ -204,17 +220,18 @@ def generate_event_table_query(keys_and_types, project_id, dataset_id, event_tab
         FROM 
             expanded
        GROUP BY 
-    event_timestamp, user_id, user_pseudo_id, event_name, event_platform, event_stream_id, traffic_source, traffic_medium, traffic_name, event_geo_country, event_geo_region, event_geo_city, event_geo_sub_continent, event_geo_metro, event_geo_continent, event_device_browser, event_device_language, event_device_is_limited_ad_tracking, event_device_mobile_model_name, event_device_mobile_marketing_name, event_device_mobile_os_hardware_model, event_device_operating_system, event_device_operating_system_version, event_device_category, event_device_mobile_brand_name, event_user_first_touch_timestamp, event_user_ltv_revenue, event_user_ltv_currency, web_info_browser, web_info_browser_version, web_info_hostname
+    event_timezone, event_timestamp, event_date, user_id, user_pseudo_id, event_name, event_platform, event_stream_id, traffic_source, traffic_medium, traffic_name, event_geo_country, event_geo_region, event_geo_city, event_geo_sub_continent, event_geo_metro, event_geo_continent, event_device_browser, event_device_language, event_device_is_limited_ad_tracking, event_device_mobile_model_name, event_device_mobile_marketing_name, event_device_mobile_os_hardware_model, event_device_operating_system, event_device_operating_system_version, event_device_category, event_device_mobile_brand_name, event_user_first_touch_timestamp, event_user_ltv_revenue, event_user_ltv_currency, web_info_browser, web_info_browser_version, web_info_hostname
 )
     SELECT 
         * 
     FROM 
         pivot_table
     """
+
+    logging.info(sql_query)
+
     return sql_query
 
-    # ... (rest of the generate_event_table_query function logic here)
-    
     logging.info("Event table query generated successfully...")
 
 def generate_user_table_query(project_id, dataset_id, user_table_pattern, utc_ts):
