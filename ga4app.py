@@ -127,7 +127,7 @@ def generate_event_table_query(keys_and_types, project_id, dataset_id, event_tab
         f"""
         SELECT
             sub.ueid,
-            FORMAT_DATETIME("%F %T +13:00", DATETIME(TIMESTAMP_MICROS(sub.event_timestamp), "+13:00")) AS event_timezone,
+            FORMAT_DATETIME("%F %T {utc_ts}", DATETIME(TIMESTAMP_MICROS(sub.event_timestamp), "{utc_ts}")) AS event_timezone,
             sub.event_timestamp AS event_timestamp,
             sub.event_date,
             sub.user_id, 
