@@ -505,7 +505,7 @@ with tab2:
             3. Find BigQuery in the list and click on Link.
             4. Follow the on-screen instructions to complete the linking process.  
              ''')
-    st.markdown("![Alt Text](https://media.giphy.com/media/vFKqnCdLPNOKc/giphy.gif)")
+    st.markdown("![Alt Text](https://github.com/team-circle-tech/GA4toBQ/blob/main/gifs/Link_GABQ.gif?raw=true)")
     st.write('''
         ### Generate JSON Config File for GCP API Access:
         **What this does:** This JSON file is a key that allows applications (like our Streamlit app) to access your BigQuery data on your behalf. It's essential to keep this file secure. By uploading the JSON, you're giving the Streamlit app the credentials it needs to access and process your BigQuery data.
