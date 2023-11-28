@@ -471,6 +471,10 @@ with tab1:
             Not all columns in the GA4 datasets (both event and user tables) are relevant for every analysis. The code identifies and excludes columns with redundant or irrelevant data, streamlining both tables for easier and more efficient querying.
             4.	Producing a Near Real-Time, Easily Reportable View for Both Tables:  
             By integrating and cleaning both the event and user data, the code provides a unified and accessible view that's: Near Real-Time: Thanks to the incorporation of intra-daily feed data. Easily Reportable: The flat structure and optimized columns make querying straightforward. Contrast with GA4 UI: While the GA4 user interface is beneficial for general insights, the Streamlit app offers several advantages: Customization: The GA4 UI presents predefined reports. In contrast, accessing BigQuery data via the Streamlit app allows for tailored analyses specific to individual needs, leveraging both event and user-level data. Granularity: The Streamlit app provides a granular look into data, offering insights into specific event parameters or individual user behaviors, something the GA4 UI may not provide in-depth. Data Access: Users can interact directly with the raw data in BigQuery via the app, offering more flexibility in analyses than the GA4 UI, especially when correlating event and user data. In summary, the Streamlit app offers a deeper, more customizable dive into GA4 data by meticulously processing and presenting both event and user tables, ensuring comprehensive insights beyond what the standard GA4 UI might offer.
+             
+            Things to do:
+             - Allow it to work with GA4 instances without known users
+             - Add in eCommerce data
             ''')
 
 # Step by step instructions and running
@@ -501,25 +505,21 @@ with tab2:
             3. Find BigQuery in the list and click on Link.
             4. Follow the on-screen instructions to complete the linking process.  
              ''')
-    if  os.path.isfile('teamcircle-399006-af8e226fd4ff.json') == True:
-        json_file = os.path.isfile('teamcircle-399006-af8e226fd4ff.json')
-        os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'teamcircle-399006-af8e226fd4ff.json'
-        client = bigquery.Client()
-    else:
-        st.write('''
-            ### Generate JSON Config File for GCP API Access:
-            **What this does:** This JSON file is a key that allows applications (like our Streamlit app) to access your BigQuery data on your behalf. It's essential to keep this file secure. By uploading the JSON, you're giving the Streamlit app the credentials it needs to access and process your BigQuery data.
-            1. Go to the Google Cloud Console
-            2. Select the project linked with your GA4.
-            3. Navigate to IAM & Admin > Service accounts.
-            4. Click on Create Service Account and give it a descriptive name.
-            5. Grant appropriate roles. For BigQuery, roles like BigQuery Data Viewer and BigQuery User are essential.
-            6. Click Continue and then Done.
-            7. Now, find the service account you just created in the list, click on the three-dot menu, and select Manage keys.
-            8. Click on Add Key and choose JSON. This will download a JSON file to your computer.
-            9. Upload the file below.  
-            ''')
-        json_file = st.file_uploader("Drop your JSON here", type="json")
+    st.markdown("![Alt Text](https://media.giphy.com/media/vFKqnCdLPNOKc/giphy.gif)")
+    st.write('''
+        ### Generate JSON Config File for GCP API Access:
+        **What this does:** This JSON file is a key that allows applications (like our Streamlit app) to access your BigQuery data on your behalf. It's essential to keep this file secure. By uploading the JSON, you're giving the Streamlit app the credentials it needs to access and process your BigQuery data.
+        1. Go to the Google Cloud Console
+        2. Select the project linked with your GA4.
+        3. Navigate to IAM & Admin > Service accounts.
+        4. Click on Create Service Account and give it a descriptive name.
+        5. Grant appropriate roles. For BigQuery, roles like BigQuery Data Viewer and BigQuery User are essential.
+        6. Click Continue and then Done.
+        7. Now, find the service account you just created in the list, click on the three-dot menu, and select Manage keys.
+        8. Click on Add Key and choose JSON. This will download a JSON file to your computer.
+        9. Upload the file below.  
+        ''')
+    json_file = st.file_uploader("Drop your JSON here", type="json")
     if not json_file :
         st.info("Upload GA JSON Authenticator to continue")
         st.stop()
