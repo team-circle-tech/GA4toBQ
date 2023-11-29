@@ -519,6 +519,7 @@ with tab2:
         8. Click on Add Key and choose JSON. This will download a JSON file to your computer.
         9. Upload the file below.  
         ''')
+    st.markdown("![Alt Text](https://github.com/team-circle-tech/GA4toBQ/blob/main/gifs/Config_JSON.gif?raw=true)")
     json_file = st.file_uploader("Drop your JSON here", type="json")
     if not json_file :
         st.info("Upload GA JSON Authenticator to continue")
