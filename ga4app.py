@@ -130,7 +130,7 @@ def generate_event_table_query(keys_and_types, project_id, dataset_id, event_tab
             FORMAT_DATETIME("%F %T {utc_ts}", DATETIME(TIMESTAMP_MICROS(sub.event_timestamp), "{utc_ts}")) AS event_timezone,
             sub.event_timestamp AS event_timestamp,
             sub.event_date,
-            sub.user_id, 
+            sub.user_id,
             sub.user_pseudo_id,
             sub.event_name,
             sub.platform AS event_platform,
@@ -160,6 +160,17 @@ def generate_event_table_query(keys_and_types, project_id, dataset_id, event_tab
             sub.device.web_info.browser AS web_info_browser,
             sub.device.web_info.browser_version AS web_info_browser_version,
             sub.device.web_info.hostname AS web_info_hostname,
+            ecommerce.total_item_quantity AS total_item_quantity,
+            ecommerce.purchase_revenue_in_usd AS purchase_revenue_in_usd,
+            ecommerce.purchase_revenue AS purchase_revenue,			
+            ecommerce.refund_value_in_usd AS refund_value_in_usd, 
+            ecommerce.refund_value AS refund_value,	
+            ecommerce.shipping_value_in_usd AS shipping_value_in_usd,		
+            ecommerce.shipping_value AS shipping_value, 
+            ecommerce.tax_value_in_usd AS tax_value_in_usd,		
+            ecommerce.tax_value AS tax_value,
+            ecommerce.unique_items AS unique_items,	
+            ecommerce.transaction_id AS transaction_id,
             ep.key AS key,
             ep.value.string_value AS string_value,
             ep.value.int_value AS int_value,
@@ -216,11 +227,22 @@ def generate_event_table_query(keys_and_types, project_id, dataset_id, event_tab
             web_info_browser,
             web_info_browser_version,
             web_info_hostname,
+            total_item_quantity,
+            purchase_revenue_in_usd,
+            purchase_revenue,			
+            refund_value_in_usd, 
+            refund_value,	
+            shipping_value_in_usd,		
+            shipping_value, 
+            tax_value_in_usd,		
+            tax_value,
+            unique_items,	
+            transaction_id,
             {pivot_sql}
         FROM 
             expanded
        GROUP BY 
-    event_timezone, event_timestamp, event_date, user_id, user_pseudo_id, event_name, event_platform, event_stream_id, traffic_source, traffic_medium, traffic_name, event_geo_country, event_geo_region, event_geo_city, event_geo_sub_continent, event_geo_metro, event_geo_continent, event_device_browser, event_device_language, event_device_is_limited_ad_tracking, event_device_mobile_model_name, event_device_mobile_marketing_name, event_device_mobile_os_hardware_model, event_device_operating_system, event_device_operating_system_version, event_device_category, event_device_mobile_brand_name, event_user_first_touch_timestamp, event_user_ltv_revenue, event_user_ltv_currency, web_info_browser, web_info_browser_version, web_info_hostname
+    event_timezone, event_timestamp, event_date, user_id, user_pseudo_id, event_name, event_platform, event_stream_id, traffic_source, traffic_medium, traffic_name, event_geo_country, event_geo_region, event_geo_city, event_geo_sub_continent, event_geo_metro, event_geo_continent, event_device_browser, event_device_language, event_device_is_limited_ad_tracking, event_device_mobile_model_name, event_device_mobile_marketing_name, event_device_mobile_os_hardware_model, event_device_operating_system, event_device_operating_system_version, event_device_category, event_device_mobile_brand_name, event_user_first_touch_timestamp, event_user_ltv_revenue, event_user_ltv_currency, web_info_browser, web_info_browser_version, web_info_hostname, total_item_quantity, purchase_revenue_in_usd, purchase_revenue, refund_value_in_usd, refund_value, shipping_value_in_usd,shipping_value, tax_value_in_usd, tax_value,unique_items, transaction_id
 )
     SELECT 
         * 
@@ -473,8 +495,9 @@ with tab1:
             By integrating and cleaning both the event and user data, the code provides a unified and accessible view that's: Near Real-Time: Thanks to the incorporation of intra-daily feed data. Easily Reportable: The flat structure and optimized columns make querying straightforward. Contrast with GA4 UI: While the GA4 user interface is beneficial for general insights, the Streamlit app offers several advantages: Customization: The GA4 UI presents predefined reports. In contrast, accessing BigQuery data via the Streamlit app allows for tailored analyses specific to individual needs, leveraging both event and user-level data. Granularity: The Streamlit app provides a granular look into data, offering insights into specific event parameters or individual user behaviors, something the GA4 UI may not provide in-depth. Data Access: Users can interact directly with the raw data in BigQuery via the app, offering more flexibility in analyses than the GA4 UI, especially when correlating event and user data. In summary, the Streamlit app offers a deeper, more customizable dive into GA4 data by meticulously processing and presenting both event and user tables, ensuring comprehensive insights beyond what the standard GA4 UI might offer.
              
             Things to do:
-             - Allow it to work with GA4 instances without known users
-             - Add in eCommerce data
+             - Currently the process expects you to have both **known users** and **eCommerce** and will error out if it you do not. The plan is to make this dynamic, but you can remove user_id and ecommerce calls queries in the code manually to make it run for now.
+
+            If you have any questions or feedback do not heistate to contact us at **howdy@teamcircle.tech**
             ''')
 
 # Step by step instructions and running
