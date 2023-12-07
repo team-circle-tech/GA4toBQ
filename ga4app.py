@@ -599,7 +599,8 @@ with tab1:
             By integrating and cleaning both the event and user data, the code provides a unified and accessible view that's: Near Real-Time: Thanks to the incorporation of intra-daily feed data. Easily Reportable: The flat structure and optimized columns make querying straightforward. Contrast with GA4 UI: While the GA4 user interface is beneficial for general insights, the Streamlit app offers several advantages: Customization: The GA4 UI presents predefined reports. In contrast, accessing BigQuery data via the Streamlit app allows for tailored analyses specific to individual needs, leveraging both event and user-level data. Granularity: The Streamlit app provides a granular look into data, offering insights into specific event parameters or individual user behaviors, something the GA4 UI may not provide in-depth. Data Access: Users can interact directly with the raw data in BigQuery via the app, offering more flexibility in analyses than the GA4 UI, especially when correlating event and user data. In summary, the Streamlit app offers a deeper, more customizable dive into GA4 data by meticulously processing and presenting both event and user tables, ensuring comprehensive insights beyond what the standard GA4 UI might offer.
              
             Things to do:
-             - There is still additional error checking to be done and error notification needs imporvment, let us know of any bugs that you encounter. 
+             - Error checking and notification needs to be improved.
+             - If there is no traffic on the website in the day you are running this it will crash as the intraday table has not been generated. Will add a check for this but you can just visit the site to generate that table.  
 
             If you have any questions or feedback do not heistate to contact us at **howdy@teamcircle.tech**
             ''')
