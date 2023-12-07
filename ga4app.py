@@ -1,5 +1,3 @@
-#TODO: Test that is still works when there are no known users
-
 import streamlit as st
 import pandas as pd
 import os
@@ -8,7 +6,7 @@ import tempfile
 import logging
 import pytz 
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from google.cloud import bigquery
 from google.api_core.exceptions import NotFound, BadRequest, GoogleAPICallError
 from io import StringIO
@@ -18,6 +16,18 @@ logging.basicConfig(level=logging.INFO, filename='script.log', filemode='w', for
 
 # Create a dictionary with country name and corresponding timezone
 timezone_dict = {
+    "Oceania": {
+        "New Zealand": "Pacific/Auckland",
+        "Australia": "Australia/Sydney",
+        "Fiji": "Pacific/Fiji",
+        "Papua New Guinea": "Pacific/Port_Moresby",
+        "Samoa": "Pacific/Apia",
+        "Tonga": "Pacific/Tongatapu",
+        "Solomon Islands": "Pacific/Guadalcanal",
+        "Vanuatu": "Pacific/Efate",
+        "Kiribati": "Pacific/Tarawa",
+        "New Caledonia": "Pacific/Noumea"
+    },
     "North America": {
         "United States": "America/New_York",
         "Canada": "America/Toronto",
@@ -64,23 +74,11 @@ timezone_dict = {
         "Vietnam": "Asia/Ho_Chi_Minh",
         "Philippines": "Asia/Manila",
         "Thailand": "Asia/Bangkok"
-    },
-    "Oceania": {
-        "Australia": "Australia/Sydney",
-        "New Zealand": "Pacific/Auckland",
-        "Fiji": "Pacific/Fiji",
-        "Papua New Guinea": "Pacific/Port_Moresby",
-        "Samoa": "Pacific/Apia",
-        "Tonga": "Pacific/Tongatapu",
-        "Solomon Islands": "Pacific/Guadalcanal",
-        "Vanuatu": "Pacific/Efate",
-        "Kiribati": "Pacific/Tarawa",
-        "New Caledonia": "Pacific/Noumea"
     }
 }
 
 # Create a list of continents
-continents = ["North America", "South America", "Europe", "Asia", "Oceania"]
+continents = ["Oceania","North America", "South America", "Europe", "Asia"]
 
 # 
 def get_unique_keys_and_types(client, project_id, dataset_id, event_table_patterns):
@@ -107,8 +105,10 @@ def get_unique_keys_and_types(client, project_id, dataset_id, event_table_patter
     return {row.key: row.value_type for row in keys_and_types}
 
 # 
-def generate_event_table_query(keys_and_types, project_id, dataset_id, event_table_patterns, utc_ts):
+def generate_event_table_query(keys_and_types, project_id, dataset_id, event_table_patterns, userid_sub, utc_ts):
     logging.info("Generating the event table query...")
+
+    userid_q = userid_sub.replace("sub.", "")
     
     pivot_sections = []
     for key, value_type in keys_and_types.items():
@@ -129,8 +129,7 @@ def generate_event_table_query(keys_and_types, project_id, dataset_id, event_tab
             FORMAT_DATETIME("%F %T {utc_ts}", DATETIME(TIMESTAMP_MICROS(sub.event_timestamp), "{utc_ts}")) AS event_timezone,
             sub.event_timestamp AS event_timestamp,
             sub.event_date,
-            sub.user_id,
-            sub.user_pseudo_id,
+            {userid_sub}
             sub.event_name,
             sub.platform AS event_platform,
             sub.stream_id AS event_stream_id,
@@ -196,8 +195,7 @@ def generate_event_table_query(keys_and_types, project_id, dataset_id, event_tab
             event_timezone,
             event_timestamp,
             event_date,
-            user_id,
-            user_pseudo_id,
+            {userid_q}
             event_name,
             event_platform,
             event_stream_id,
@@ -241,7 +239,7 @@ def generate_event_table_query(keys_and_types, project_id, dataset_id, event_tab
         FROM 
             expanded
        GROUP BY 
-    event_timezone, event_timestamp, event_date, user_id, user_pseudo_id, event_name, event_platform, event_stream_id, traffic_source, traffic_medium, traffic_name, event_geo_country, event_geo_region, event_geo_city, event_geo_sub_continent, event_geo_metro, event_geo_continent, event_device_browser, event_device_language, event_device_is_limited_ad_tracking, event_device_mobile_model_name, event_device_mobile_marketing_name, event_device_mobile_os_hardware_model, event_device_operating_system, event_device_operating_system_version, event_device_category, event_device_mobile_brand_name, event_user_first_touch_timestamp, event_user_ltv_revenue, event_user_ltv_currency, web_info_browser, web_info_browser_version, web_info_hostname, total_item_quantity, purchase_revenue_in_usd, purchase_revenue, refund_value_in_usd, refund_value, shipping_value_in_usd,shipping_value, tax_value_in_usd, tax_value,unique_items, transaction_id
+    event_timezone, event_timestamp, event_date, {userid_q} event_name, event_platform, event_stream_id, traffic_source, traffic_medium, traffic_name, event_geo_country, event_geo_region, event_geo_city, event_geo_sub_continent, event_geo_metro, event_geo_continent, event_device_browser, event_device_language, event_device_is_limited_ad_tracking, event_device_mobile_model_name, event_device_mobile_marketing_name, event_device_mobile_os_hardware_model, event_device_operating_system, event_device_operating_system_version, event_device_category, event_device_mobile_brand_name, event_user_first_touch_timestamp, event_user_ltv_revenue, event_user_ltv_currency, web_info_browser, web_info_browser_version, web_info_hostname, total_item_quantity, purchase_revenue_in_usd, purchase_revenue, refund_value_in_usd, refund_value, shipping_value_in_usd,shipping_value, tax_value_in_usd, tax_value,unique_items, transaction_id
 )
     SELECT 
         * 
@@ -341,9 +339,9 @@ def generate_user_table_query(project_id, dataset_id, user_table_pattern, utc_ts
 
     logging.info("User table query generated successfully...")
 
-def generate_item_table_query(keys_and_types, project_id, dataset_id, event_table_patterns, utc_ts):
+def generate_item_table_query(keys_and_types, project_id, dataset_id, event_table_patterns, userid_sub, utc_ts):
     logging.info("Generating the item table query...")
-    
+
     union_subqueries = [
         f"""
         SELECT
@@ -351,8 +349,7 @@ def generate_item_table_query(keys_and_types, project_id, dataset_id, event_tabl
             FORMAT_DATETIME("%F %T {utc_ts}", DATETIME(TIMESTAMP_MICROS(sub.event_timestamp), "{utc_ts}")) AS event_timezone,
             sub.event_timestamp AS event_timestamp,
             sub.event_date,
-            sub.user_id,
-            sub.user_pseudo_id,
+            {userid_sub}
             sub.event_name,
             sub.platform AS event_platform,
             sub.stream_id AS event_stream_id,
@@ -562,24 +559,21 @@ def create_user_table_view(client, project_id, dataset_id, user_table_pattern, u
     user_table_query = generate_user_table_query(project_id, dataset_id, user_table_pattern, utc_ts)
     create_or_replace_view(client, project_id, dataset_id, "user_table_view", user_table_query)
 
-def create_event_table_view(client, project_id, dataset_id, event_table_patterns, keys_and_types):
-    event_table_query = generate_event_table_query(keys_and_types, project_id, dataset_id, event_table_patterns, utc_ts)
+def create_event_table_view(client, project_id, dataset_id, event_table_patterns, userid_sub, keys_and_types, utc_ts):
+    event_table_query = generate_event_table_query(keys_and_types, project_id, dataset_id, event_table_patterns, userid_sub, utc_ts)
     create_or_replace_view(client, project_id, dataset_id, "event_table_view", event_table_query)
 
-def create_item_table_view(client, project_id, dataset_id, event_table_patterns, keys_and_types):
-    item_table_query = generate_item_table_query(keys_and_types, project_id, dataset_id, event_table_patterns, utc_ts)
+def create_item_table_view(client, project_id, dataset_id, event_table_patterns, userid_sub, keys_and_types, utc_ts):
+    item_table_query = generate_item_table_query(keys_and_types, project_id, dataset_id, event_table_patterns, userid_sub, utc_ts)
     logging.info(item_table_query)
     create_or_replace_view(client, project_id, dataset_id, "item_table_view", item_table_query)
 
 view_names = "user_table_view", "event_table_view", "item_table_view"
 event_table_patterns = "events_*", "events_intraday_*"
-user_table_pattern = "users_*", "pseudonymous_users_*"
 
-############################################################################################################################################################
+##############################################################################################################################################
 # Streamlit Layout
-############################################################################################################################################################
-
-
+##############################################################################################################################################
 st.set_page_config(layout="wide", page_icon=":unlock:", page_title="GA4 Data Transformer and Dashboard")
 st.title("Unlocking your GA4 data :unlock:")
 
@@ -605,7 +599,7 @@ with tab1:
             By integrating and cleaning both the event and user data, the code provides a unified and accessible view that's: Near Real-Time: Thanks to the incorporation of intra-daily feed data. Easily Reportable: The flat structure and optimized columns make querying straightforward. Contrast with GA4 UI: While the GA4 user interface is beneficial for general insights, the Streamlit app offers several advantages: Customization: The GA4 UI presents predefined reports. In contrast, accessing BigQuery data via the Streamlit app allows for tailored analyses specific to individual needs, leveraging both event and user-level data. Granularity: The Streamlit app provides a granular look into data, offering insights into specific event parameters or individual user behaviors, something the GA4 UI may not provide in-depth. Data Access: Users can interact directly with the raw data in BigQuery via the app, offering more flexibility in analyses than the GA4 UI, especially when correlating event and user data. In summary, the Streamlit app offers a deeper, more customizable dive into GA4 data by meticulously processing and presenting both event and user tables, ensuring comprehensive insights beyond what the standard GA4 UI might offer.
              
             Things to do:
-             - Currently the process expects you to have both **known users** and **eCommerce** and will error out if it you do not. The plan is to make this dynamic, but you can remove user_id and ecommerce calls queries in the code manually to make it run for now.
+             - There is still additional error checking to be done and error notification needs imporvment, let us know of any bugs that you encounter. 
 
             If you have any questions or feedback do not heistate to contact us at **howdy@teamcircle.tech**
             ''')
@@ -692,16 +686,59 @@ with tab2:
         st.info("Enter a Dataset ID to continue")
         st.stop()
 
+    st.write("Checking for known users")
+    #Check if there are known users 
+    tables = client.list_tables(project_id+'.'+dataset_id)
+    table_names = set(table.table_id for table in tables)
+    today = datetime.now()
+    yesterday = today - timedelta(days=1)
+    formatted_yesterday = yesterday.strftime('%Y%m%d')
+    user_table = "users_"+formatted_yesterday
+    # Check if the 'users' table exists
+    if user_table in table_names:
+        st.write("Table "+user_table+" does exist.")
+        user_table_pattern = "users_*", "pseudonymous_users_*"
+        userid_sub = "sub.user_id, sub.user_pseudo_id,"
+    else:
+        st.write("Table "+user_table+" does not exist.")
+        user_table_pattern = "pseudonymous_users_*",""
+        userid_sub = "sub.user_pseudo_id,"
+
+    
     #This is where things are run
     keys_and_types = get_unique_keys_and_types(client, project_id, dataset_id, event_table_patterns)
     if keys_and_types:
+
         st.write("Retrieved keys and types:")#, keys_and_types)
         create_user_table_view(client, project_id, dataset_id, user_table_pattern, utc_ts)
         st.write("create_user_table_view")
-        create_event_table_view(client, project_id, dataset_id, event_table_patterns, keys_and_types)
+
+        create_event_table_view(client, project_id, dataset_id, event_table_patterns, userid_sub, keys_and_types, utc_ts)
         st.write("create_event_table_view")
-        create_item_table_view(client, project_id, dataset_id, event_table_patterns, keys_and_types)
-        st.write("create_items_table_view")
+
+        #check if there are any items 
+        itemcheckquery = f"""
+        SELECT it.item_id AS item_id, FROM ( SELECT GENERATE_UUID() as ueid, * FROM `{project_id}.{dataset_id}.events_*`) sub CROSS JOIN UNNEST(sub.items) AS it LIMIT 1
+        """
+        query_job = client.query(itemcheckquery)
+        # Attempt to fetch one row
+        try:
+            # Get the results
+            results = query_job.result()  # Waits for the job to complete
+
+            # Fetch one row
+            row = next(results, None)
+
+            # Check if the query returned at least one result
+            if row:
+                create_item_table_view(client, project_id, dataset_id, event_table_patterns, userid_sub, keys_and_types, utc_ts)
+                st.write("create_items_table_view")
+            else:
+                st.write("No items found in event table")
+
+        except Exception as e:
+            st.error(f"Error occurred: {e}")
+
         create_summary_statistics(client, project_id, dataset_id, view_names)
         st.write("create_summary_statistics")
         st.write("FINISHED!")
