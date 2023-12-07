@@ -1,5 +1,4 @@
 #TODO: Test that is still works when there are no known users
-#TODO: Add eCommerece 
 
 import streamlit as st
 import pandas as pd
@@ -342,6 +341,112 @@ def generate_user_table_query(project_id, dataset_id, user_table_pattern, utc_ts
 
     logging.info("User table query generated successfully...")
 
+def generate_item_table_query(keys_and_types, project_id, dataset_id, event_table_patterns, utc_ts):
+    logging.info("Generating the item table query...")
+    
+    union_subqueries = [
+        f"""
+        SELECT
+            sub.ueid,
+            FORMAT_DATETIME("%F %T {utc_ts}", DATETIME(TIMESTAMP_MICROS(sub.event_timestamp), "{utc_ts}")) AS event_timezone,
+            sub.event_timestamp AS event_timestamp,
+            sub.event_date,
+            sub.user_id,
+            sub.user_pseudo_id,
+            sub.event_name,
+            sub.platform AS event_platform,
+            sub.stream_id AS event_stream_id,
+            sub.traffic_source.source AS traffic_source,
+            sub.traffic_source.medium AS traffic_medium,
+            sub.traffic_source.name AS traffic_name,
+            sub.geo.country AS event_geo_country,
+            sub.geo.region AS event_geo_region,
+            sub.geo.city AS event_geo_city,
+            sub.geo.sub_continent AS event_geo_sub_continent,
+            sub.geo.metro AS event_geo_metro,
+            sub.geo.continent AS event_geo_continent,
+            sub.device.browser AS event_device_browser,
+            sub.device.language AS event_device_language,
+            sub.device.is_limited_ad_tracking AS event_device_is_limited_ad_tracking,
+            sub.device.mobile_model_name AS event_device_mobile_model_name,
+            sub.device.mobile_marketing_name AS event_device_mobile_marketing_name,
+            sub.device.mobile_os_hardware_model AS event_device_mobile_os_hardware_model,
+            sub.device.operating_system AS event_device_operating_system,
+            sub.device.operating_system_version AS event_device_operating_system_version,
+            sub.device.category AS event_device_category,
+            sub.device.mobile_brand_name AS event_device_mobile_brand_name,
+            sub.user_first_touch_timestamp AS event_user_first_touch_timestamp,
+            sub.user_ltv.revenue AS event_user_ltv_revenue,
+            sub.user_ltv.currency AS event_user_ltv_currency,
+            sub.device.web_info.browser AS web_info_browser,
+            sub.device.web_info.browser_version AS web_info_browser_version,
+            sub.device.web_info.hostname AS web_info_hostname,
+            sub.ecommerce.total_item_quantity AS total_item_quantity,
+            sub.ecommerce.purchase_revenue_in_usd AS purchase_revenue_in_usd,
+            sub.ecommerce.purchase_revenue AS purchase_revenue,			
+            sub.ecommerce.refund_value_in_usd AS refund_value_in_usd, 
+            sub.ecommerce.refund_value AS refund_value,	
+            sub.ecommerce.shipping_value_in_usd AS shipping_value_in_usd,		
+            sub.ecommerce.shipping_value AS shipping_value, 
+            sub.ecommerce.tax_value_in_usd AS tax_value_in_usd,		
+            sub.ecommerce.tax_value AS tax_value,
+            sub.ecommerce.unique_items AS unique_items,	
+            sub.ecommerce.transaction_id AS transaction_id,
+            it.item_id AS item_id,
+            it.item_name AS item_name,
+            it.item_brand AS item_brand,
+            it.item_variant AS item_variant,
+            it.item_category AS item_category,
+            it.item_category2 AS item_category2,
+            it.item_category3 AS item_category3,
+            it.item_category4 AS item_category4,
+            it.item_category5 AS item_category5,
+            it.price_in_usd AS price_in_usd,
+            it.price AS price,
+            it.quantity AS quantity,
+            it.item_revenue_in_usd AS item_revenue_in_usd,
+            it.item_revenue AS item_revenue,
+            it.item_refund_in_usd AS item_refund_in_usd,
+            it.item_refund AS item_refund,
+            it.coupon AS coupon,
+            it.affiliation AS affiliation,
+            it.location_id AS location_id,
+            it.item_list_id AS item_list_id,
+            it.item_list_name AS item_list_name,
+            it.item_list_index AS item_list_index,
+            it.promotion_id AS promotion_id,
+            it.promotion_name AS promotion_name,
+            it.creative_name AS creative_name,
+            it.creative_slot AS creative_slot,
+        FROM (
+            SELECT
+                GENERATE_UUID() as ueid,
+                *
+            FROM 
+                `{project_id}.{dataset_id}.{table_pattern}`
+        ) sub
+        CROSS JOIN UNNEST(sub.items) AS it
+        """
+        for table_pattern in event_table_patterns
+    ]
+
+    sql_query = f"""
+    WITH expanded AS (
+        {" UNION ALL ".join(union_subqueries)}
+    )
+
+    SELECT 
+        * 
+    FROM 
+        expanded
+    """
+
+    logging.info(sql_query)
+
+    return sql_query
+
+    logging.info("Event table items generated successfully...")
+
 # Function to retrieve schema columns
 def get_schema_columns(client, project_id, dataset_id, table_name):
     query = f"SELECT column_name FROM `{project_id}.{dataset_id}.INFORMATION_SCHEMA.COLUMNS` WHERE table_name = '{table_name}'"
@@ -461,7 +566,12 @@ def create_event_table_view(client, project_id, dataset_id, event_table_patterns
     event_table_query = generate_event_table_query(keys_and_types, project_id, dataset_id, event_table_patterns, utc_ts)
     create_or_replace_view(client, project_id, dataset_id, "event_table_view", event_table_query)
 
-view_names = "user_table_view", "event_table_view"
+def create_item_table_view(client, project_id, dataset_id, event_table_patterns, keys_and_types):
+    item_table_query = generate_item_table_query(keys_and_types, project_id, dataset_id, event_table_patterns, utc_ts)
+    logging.info(item_table_query)
+    create_or_replace_view(client, project_id, dataset_id, "item_table_view", item_table_query)
+
+view_names = "user_table_view", "event_table_view", "item_table_view"
 event_table_patterns = "events_*", "events_intraday_*"
 user_table_pattern = "users_*", "pseudonymous_users_*"
 
@@ -586,12 +696,12 @@ with tab2:
     keys_and_types = get_unique_keys_and_types(client, project_id, dataset_id, event_table_patterns)
     if keys_and_types:
         st.write("Retrieved keys and types:")#, keys_and_types)
-        generate_event_table_query(keys_and_types, project_id, dataset_id, event_table_patterns, utc_ts)
-        st.write("generate_event_table_query")
         create_user_table_view(client, project_id, dataset_id, user_table_pattern, utc_ts)
         st.write("create_user_table_view")
         create_event_table_view(client, project_id, dataset_id, event_table_patterns, keys_and_types)
         st.write("create_event_table_view")
+        create_item_table_view(client, project_id, dataset_id, event_table_patterns, keys_and_types)
+        st.write("create_items_table_view")
         create_summary_statistics(client, project_id, dataset_id, view_names)
         st.write("create_summary_statistics")
         st.write("FINISHED!")
