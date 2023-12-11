@@ -126,7 +126,7 @@ def generate_event_table_query(keys_and_types, project_id, dataset_id, event_tab
         f"""
         SELECT
             sub.ueid,
-            FORMAT_DATETIME("%F %T {utc_ts}", DATETIME(TIMESTAMP_MICROS(sub.event_timestamp), "{utc_ts}")) AS event_timezone,
+            DATETIME(TIMESTAMP_MICROS(sub.event_timestamp), "{utc_ts}") AS event_timezone,
             sub.event_timestamp AS event_timestamp,
             sub.event_date,
             {userid_sub}
@@ -262,8 +262,8 @@ def generate_user_table_query(project_id, dataset_id, user_table_pattern, utc_ts
             subquery = f"""
             SELECT
                 pseudo_user_id AS user_id,
-                FORMAT_DATETIME("%F %T {utc_ts}", DATETIME(TIMESTAMP_MICROS(user_info.last_active_timestamp_micros), "{utc_ts}")) AS user_last_active_timestamp,
-                FORMAT_DATETIME("%F %T {utc_ts}", DATETIME(TIMESTAMP_MICROS(user_info.user_first_touch_timestamp_micros), "{utc_ts}")) AS user_first_touch_timestamp,
+                DATETIME(TIMESTAMP_MICROS(user_info.last_active_timestamp_micros), "{utc_ts}") AS user_last_active_timestamp,
+                DATETIME(TIMESTAMP_MICROS(user_info.user_first_touch_timestamp_micros), "{utc_ts}") AS user_first_touch_timestamp,
                 user_info.first_purchase_date AS user_first_purchase_date,
                 device.operating_system AS user_device_operating_system,
                 device.category AS user_device_category,
@@ -294,8 +294,8 @@ def generate_user_table_query(project_id, dataset_id, user_table_pattern, utc_ts
             subquery = f"""
             SELECT
                 user_id AS user_id,
-                FORMAT_DATETIME("%F %T {utc_ts}", DATETIME(TIMESTAMP_MICROS(user_info.last_active_timestamp_micros), "{utc_ts}")) AS user_last_active_timestamp,
-                FORMAT_DATETIME("%F %T {utc_ts}", DATETIME(TIMESTAMP_MICROS(user_info.user_first_touch_timestamp_micros), "{utc_ts}")) AS user_first_touch_timestamp,
+                DATETIME(TIMESTAMP_MICROS(user_info.last_active_timestamp_micros), "{utc_ts}") AS user_last_active_timestamp,
+                DATETIME(TIMESTAMP_MICROS(user_info.user_first_touch_timestamp_micros), "{utc_ts}") AS user_first_touch_timestamp,
                 user_info.first_purchase_date AS user_first_purchase_date,
                 device.operating_system AS user_device_operating_system,
                 device.category AS user_device_category,
@@ -346,7 +346,7 @@ def generate_item_table_query(keys_and_types, project_id, dataset_id, event_tabl
         f"""
         SELECT
             sub.ueid,
-            FORMAT_DATETIME("%F %T {utc_ts}", DATETIME(TIMESTAMP_MICROS(sub.event_timestamp), "{utc_ts}")) AS event_timezone,
+            DATETIME(TIMESTAMP_MICROS(sub.event_timestamp), "{utc_ts}") AS event_timezone,
             sub.event_timestamp AS event_timestamp,
             sub.event_date,
             {userid_sub}
@@ -622,8 +622,9 @@ with tab2:
     # Display the selected UTC offset for confirmation
     timezone = timezone_dict[continent][country]
     utc_offset = datetime.now(pytz.timezone(timezone)).strftime('%z')
-    utc_ts = utc_offset[:-2]+':'+utc_offset[-2:]
-    st.markdown(f"> :earth_americas:  **{country}** time zone is **UTC{utc_ts}**")
+    utc_tz = utc_offset[:-2]+':'+utc_offset[-2:]
+    utc_ts = timezone
+    st.markdown(f"> :earth_americas:  **{country}** time zone is **UTC{utc_tz}** and in Timezone: **{timezone}**")
 
     st.write('''
             ### Connect Google Analytics 4 (GA4) to BigQuery:
@@ -736,6 +737,7 @@ with tab2:
                 st.write("create_items_table_view")
             else:
                 st.write("No items found in event table")
+                view_names = "user_table_view", "event_table_view"
 
         except Exception as e:
             st.error(f"Error occurred: {e}")
