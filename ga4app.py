@@ -32,7 +32,9 @@ timezone_dict = {
         "New Caledonia": "Pacific/Noumea"
     },
     "North America": {
-        "United States": "America/New_York",
+        "USA Eastern": "America/New_York",
+        "USA Central": "America/Chicago",
+        "USA Pacific": "America/Los_Angeles",
         "Canada": "America/Toronto",
         "Mexico": "America/Mexico_City",
         "Jamaica": "America/Jamaica",
