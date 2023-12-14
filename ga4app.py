@@ -284,7 +284,7 @@ with tab2:
         st.write("FINISHED!")
         st.write('''
             ### Notes
-            [Link to looker dashboard](https://lookerstudio.google.com/reporting/3cc760c8-59b9-4679-8e35-75ce2439cc3c/preview)
+            [Link to looker dashboard](https://lookerstudio.google.com/reporting/5d4d6088-3ecb-48d8-8059-cc08cbbfac4d/preview)
             ''')
     else:
         st.write("Failed to retrieve keys and types.")
