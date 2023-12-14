@@ -117,7 +117,7 @@ with tab1:
              
             Things to do:
              - Error checking and notification needs to be improved.
-             - If there is no traffic on the website in the day you are running this it will crash as the intraday table has not been generated. Will add a check for this but you can just visit the site to generate that table.  
+             - Unnest and add audience data for users 
 
             If you have any questions or feedback do not heistate to contact us at **howdy@teamcircle.tech**
             ''')

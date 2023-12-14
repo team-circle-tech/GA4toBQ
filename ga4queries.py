@@ -218,10 +218,19 @@ def generate_user_table_query(project_id, dataset_id, user_table_pattern, utc_ts
                 predictions.purchase_score_7d AS user_prediction_purchase_score_7d,
                 predictions.churn_score_7d AS user_prediction_churn_score_7d,
                 predictions.revenue_28d_in_usd AS user_prediction_revenue_28d,
+                privacy_info.is_limited_ad_tracking, 
+                privacy_info.is_ads_personalization_allowed,
                 occurrence_date AS user_occurrence_date,
                 last_updated_date AS user_last_updated_date,
+                "pseudo" as user_type,
             FROM 
-                `{project_id}.{dataset_id}.{pattern}`
+                `{project_id}.{dataset_id}.{pattern}` AS main_table
+            WHERE
+            user_info.last_active_timestamp_micros = (
+                SELECT MAX(user_info.last_active_timestamp_micros)
+                FROM `{project_id}.{dataset_id}.{pattern}`
+                WHERE pseudo_user_id = main_table.pseudo_user_id
+            )
             """
             union_subqueries.append(subquery)
         elif pattern == "users_*":
@@ -250,10 +259,19 @@ def generate_user_table_query(project_id, dataset_id, user_table_pattern, utc_ts
                 predictions.purchase_score_7d AS user_prediction_purchase_score_7d,
                 predictions.churn_score_7d AS user_prediction_churn_score_7d,
                 predictions.revenue_28d_in_usd AS user_prediction_revenue_28d,
+                privacy_info.is_limited_ad_tracking, 
+                privacy_info.is_ads_personalization_allowed,
                 occurrence_date AS user_occurrence_date,
                 last_updated_date AS user_last_updated_date,
+                "known" as user_type,
             FROM 
-                `{project_id}.{dataset_id}.{pattern}`
+                `{project_id}.{dataset_id}.{pattern}` AS main_table
+            WHERE
+            user_info.last_active_timestamp_micros = (
+                SELECT MAX(user_info.last_active_timestamp_micros)
+                FROM `{project_id}.{dataset_id}.{pattern}`
+                WHERE user_id = main_table.user_id
+            )
             """
             union_subqueries.append(subquery)
 
@@ -269,6 +287,9 @@ def generate_user_table_query(project_id, dataset_id, user_table_pattern, utc_ts
     FROM 
         expanded
     """
+
+    logging.info(sql_query)
+
     return sql_query
 
     logging.info("User table query generated successfully...")
