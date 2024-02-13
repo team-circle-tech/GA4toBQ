@@ -96,10 +96,11 @@ st.title("Unlocking your GA4 data :unlock:")
 
 # Get IDs for Project before continuing
 
-tab1, tab2 = st.tabs(["Main", "Instructions"])
+
+tab1, tab2 = st.tabs(["Main", "Explanation"])
 
 #Explain what is the point of this tool
-with tab1:
+with tab2:
     st.write('''
              ## Explanation
              ### For those curious about the technical aspects: 
@@ -123,7 +124,7 @@ with tab1:
             ''')
 
 # Step by step instructions and running
-with tab2:
+with tab1:
     st.write('''
             ## Step-by-Step Guide
             ### Set timezone adjustment:
