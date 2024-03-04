@@ -94,9 +94,6 @@ event_table_patterns = "events_*", "events_intraday_*"
 st.set_page_config(layout="wide", page_icon=":unlock:", page_title="GA4 Data Transformer and Dashboard")
 st.title("Unlocking your GA4 data :unlock:")
 
-# Get IDs for Project before continuing
-
-
 tab1, tab2 = st.tabs(["Main", "Explanation"])
 
 #Explain what is the point of this tool
@@ -224,8 +221,9 @@ with tab1:
         st.write("Events for yesterday found")
 
     # Checking if the today events_intraday table exists, if not it errors our
-    st.write("Checking for traffic today")
     events_intra = "events_intraday_"+formatted_today
+    st.write("Checking for traffic today:")
+    st.write(events_intra)
     if events_intra not in table_names:
         st.error("You have no traffic on your site for today, please generate some")
         sys.exit()
