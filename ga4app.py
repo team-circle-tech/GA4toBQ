@@ -206,7 +206,7 @@ with tab1:
     # Generate table list to account for known users, traffic for the day
     tables = client.list_tables(project_id+'.'+dataset_id)
     table_names = set(table.table_id for table in tables)
-    today = datetime.now()
+    today = datetime.now(pytz.timezone(utc_ts)) 
     formatted_today = today.strftime('%Y%m%d')
     yesterday = today - timedelta(days=1)
     formatted_yesterday = yesterday.strftime('%Y%m%d')
