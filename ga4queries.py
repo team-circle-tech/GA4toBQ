@@ -27,15 +27,15 @@ def get_unique_keys_and_types(client, project_id, dataset_id, event_table_patter
                ) AS value_type
         FROM `{project_id}.{dataset_id}.{table_pattern}`,
         UNNEST(event_params) AS ep
+        GROUP BY key, value_type
         """
         for table_pattern in event_table_patterns
     ]
-    query = " UNION ALL ".join(union_subqueries) + " GROUP BY key, value_type"
+    query = " UNION ALL ".join(union_subqueries)
     query_job = client.query(query)
     keys_and_types = query_job.result()
     logging.info("keys and types")
     logging.info(query)
-    st.write("Unique keys and types retrieved successfully.")
     return {row.key: row.value_type for row in keys_and_types}
 
 # 
@@ -192,7 +192,7 @@ def generate_user_table_query(project_id, dataset_id, user_table_pattern, utc_ts
     union_subqueries = []
 
     for pattern in user_table_pattern:
-        if pattern == "pseudonymous_users_*":
+        if "pseudonymous_users" in pattern:
             subquery = f"""
             SELECT
                 pseudo_user_id AS user_id,
@@ -233,7 +233,7 @@ def generate_user_table_query(project_id, dataset_id, user_table_pattern, utc_ts
             )
             """
             union_subqueries.append(subquery)
-        elif pattern == "users_*":
+        elif "users" in pattern:
             subquery = f"""
             SELECT
                 user_id AS user_id,

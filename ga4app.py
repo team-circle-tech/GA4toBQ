@@ -85,8 +85,10 @@ timezone_dict = {
 # Create a list of continents
 continents = ["Oceania","North America", "South America", "Europe", "Asia"]
 
+# Create a list of ranges
+dranges = ["All","Days", "Months"]
+
 view_names = "user_table_view", "event_table_view", "item_table_view"
-event_table_patterns = "events_*", "events_intraday_*"
 
 ##############################################################################################################################################
 # Streamlit Layout
@@ -140,6 +142,30 @@ with tab1:
     utc_tz = utc_offset[:-2]+':'+utc_offset[-2:]
     utc_ts = timezone
     st.markdown(f"> :earth_americas:  **{country}** time zone is **UTC{utc_tz}** and in Timezone: **{timezone}**")
+
+
+    today = datetime.now(pytz.timezone(utc_ts)) 
+    formatted_today = today.strftime('%Y%m%d')
+    formatted_days = today.strftime('%Y%m*')
+    formatted_months = today.strftime('%Y*')
+    yesterday = today - timedelta(days=1)
+    formatted_yesterday = yesterday.strftime('%Y%m%d')
+
+    st.write('''
+        ### Set daterange adjsutment:
+        **What this does:** The drop downs below alters how far back the data goes, if the process is timing out you will want to restrict the amount of data you pull in 
+            ''')
+    # Create a dropdown to select date range 
+    drange = st.selectbox("2. Select a date range", dranges)
+    if drange == "All":
+        wildcard_date = f"*"
+    elif drange == "Days":
+        wildcard_date = f"{formatted_days}"
+    elif drange == "Months":
+        wildcard_date = f"{formatted_months}"
+    st.markdown(f"Date Range: **{wildcard_date}**")
+
+    event_table_patterns = "events_"+wildcard_date, "events_intraday_"+wildcard_date
 
     st.write('''
             ### Connect Google Analytics 4 (GA4) to BigQuery:
@@ -206,10 +232,6 @@ with tab1:
     # Generate table list to account for known users, traffic for the day
     tables = client.list_tables(project_id+'.'+dataset_id)
     table_names = set(table.table_id for table in tables)
-    today = datetime.now(pytz.timezone(utc_ts)) 
-    formatted_today = today.strftime('%Y%m%d')
-    yesterday = today - timedelta(days=1)
-    formatted_yesterday = yesterday.strftime('%Y%m%d')
 
     # Checking if the events table exists if not error out
     st.write("Checking for events yesterday today")
@@ -236,28 +258,35 @@ with tab1:
     # Check if the 'users' table exists
     if user_table in table_names:
         st.write("Table "+user_table+" does exist.")
-        user_table_pattern = "users_*", "pseudonymous_users_*"
+        user_table_pattern = "users_"+wildcard_date, "pseudonymous_users_"+wildcard_date
         userid_sub = "sub.user_id, sub.user_pseudo_id,"
     else:
         st.write("Table "+user_table+" does not exist.")
-        user_table_pattern = "pseudonymous_users_*",""
+        user_table_pattern = "pseudonymous_users_"+wildcard_date,""
         userid_sub = "sub.user_pseudo_id,"
 
     #This is where things are run
     keys_and_types = get_unique_keys_and_types(client, project_id, dataset_id, event_table_patterns)
+    st.write("Unique keys and types retrieved successfully.")
     if keys_and_types:
 
-        st.write("Retrieved keys and types:")#, keys_and_types)
+        st.write("Retrieved keys and types.")#, keys_and_types)
+        st.write("Creating User Table View.")
+        logging.info(user_table_pattern)
         create_user_table_view(client, project_id, dataset_id, user_table_pattern, utc_ts)
-        st.write("create_user_table_view")
-
+        st.write("User Table Created")
+        
+        st.write("Creating Event Table View.")
+        logging.info(event_table_patterns)
         create_event_table_view(client, project_id, dataset_id, event_table_patterns, userid_sub, keys_and_types, utc_ts)
-        st.write("create_event_table_view")
+        st.write("Event Table Created.")
 
         #check if there are any items 
+        st.write("Checking for eCommerce.")
         itemcheckquery = f"""
-        SELECT it.item_id AS item_id, FROM ( SELECT GENERATE_UUID() as ueid, * FROM `{project_id}.{dataset_id}.events_*`) sub CROSS JOIN UNNEST(sub.items) AS it LIMIT 1
+        SELECT it.item_id AS item_id, FROM ( SELECT GENERATE_UUID() as ueid, * FROM `{project_id}.{dataset_id}.events_{formatted_yesterday}`) sub CROSS JOIN UNNEST(sub.items) AS it LIMIT 1
         """
+        logging.info(itemcheckquery)
         query_job = client.query(itemcheckquery)
         # Attempt to fetch one row
         try:
@@ -270,7 +299,7 @@ with tab1:
             # Check if the query returned at least one result
             if row:
                 create_item_table_view(client, project_id, dataset_id, event_table_patterns, userid_sub, keys_and_types, utc_ts)
-                st.write("create_items_table_view")
+                st.write("Items Table View Created")
             else:
                 st.write("No items found in event table")
                 view_names = "user_table_view", "event_table_view"
@@ -278,8 +307,9 @@ with tab1:
         except Exception as e:
             st.error(f"Error occurred: {e}")
 
+        st.write("Creating Summary Statistics")
         create_summary_statistics(client, project_id, dataset_id, view_names)
-        st.write("create_summary_statistics")
+        st.write("Summary Statistics Created")
         st.write("FINISHED!")
         st.write('''
             ### Notes
