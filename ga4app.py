@@ -152,8 +152,8 @@ with tab1:
     formatted_yesterday = yesterday.strftime('%Y%m%d')
 
     st.write('''
-        ### Set daterange adjsutment:
-        **What this does:** The drop downs below alters how far back the data goes, if the process is timing out you will want to restrict the amount of data you pull in 
+        ### Set daterange adjustment:
+        **What this does:** The drop downs below alters how far back the data is checked, if the process is timing out you will want to restrict the amount of data you pull in 
             ''')
     # Create a dropdown to select date range 
     drange = st.selectbox("2. Select a date range", dranges)
@@ -223,7 +223,7 @@ with tab1:
     if "DATASET_ID" in st.secrets:
         dataset_id = st.secrets["DATASET_ID"]
     else:
-        st.write("Give us your dataset id from balah blah")
+        st.write(f"Give us your dataset id from {project_id}")
         dataset_id = st.text_input("Dataset ID")
     if not dataset_id:
         st.info("Enter a Dataset ID to continue")
