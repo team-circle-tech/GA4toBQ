@@ -121,6 +121,8 @@ with tab2:
 
             If you have any questions or feedback do not heistate to contact us at **howdy@teamcircle.tech**
             ''')
+    
+    st.video('https://youtu.be/DYRPBMjhqnk') 
 
 # Step by step instructions and running
 with tab1:
